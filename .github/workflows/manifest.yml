@@ -1,4 +1,6 @@
+
 name: Update Manifest
+
 on:
   workflow_dispatch:
   push:
@@ -6,49 +8,76 @@ on:
     paths:
       - 'updates/**'
       - '!updates/manifest.json'
+
 permissions:
   contents: write
+
 jobs:
   manifest:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Generate manifest.json
         run: |
           python3 - <<'PY'
-          import os, json, hashlib, urllib.parse
+          import os
+          import json
+          import hashlib
+          import urllib.parse
+
+          root = "updates"
+          os.makedirs(root, exist_ok=True)
+
           repo = os.environ["GITHUB_REPOSITORY"]
           sha = os.environ["GITHUB_SHA"]
-          root = "updates"
           files = []
+
           for d, _, fs in os.walk(root):
               for f in fs:
-                  if f.startswith("."):
+                  if f.startswith(".") or f == "manifest.json":
                       continue
-                  if d == root and f == "manifest.json":
-                      continue
+
                   full = os.path.join(d, f)
                   rel = os.path.relpath(full, root).replace(os.sep, "/")
+
                   h = hashlib.sha256()
                   with open(full, "rb") as fh:
-                      for chunk in iter(lambda: fh.read(1 << 20), b""):
+                      for chunk in iter(lambda: fh.read(1048576), b""):
                           h.update(chunk)
-                  url = "https://raw.githubusercontent.com/%s/%s/updates/%s" % (repo, sha, urllib.parse.quote(rel))
-                  files.append({"path": rel, "url": url, "sha256": h.hexdigest().upper()})
+
+                  url = (
+                      f"https://raw.githubusercontent.com/"
+                      f"{repo}/{sha}/updates/"
+                      f"{urllib.parse.quote(rel, safe='/')}"
+                  )
+
+                  files.append({
+                      "path": rel,
+                      "url": url,
+                      "sha256": h.hexdigest().upper()
+                  })
+
           files.sort(key=lambda x: x["path"])
-          with open("updates/manifest.json", "w") as out:
-              json.dump({"version": sha[:7], "files": files}, out, indent=2)
-          print("manifest with", len(files), "files")
+
+          manifest = {"version": sha[:7], "files": files}
+
+          with open(os.path.join(root, "manifest.json"), "w") as out:
+              json.dump(manifest, out, indent=2)
+
+          print(f"Manifest generated: {len(files)} files")
           PY
+
       - name: Commit manifest
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@users.noreply.github.com"
           git add updates/manifest.json
+
           if git diff --cached --quiet; then
             echo "No changes"
           else
             git commit -m "Update manifest [skip ci]"
-            git pull --rebase
             git push
           fi
