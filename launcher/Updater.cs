@@ -27,12 +27,12 @@ namespace DarkSide.Launcher
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(15) };
 
-            progress.Report((0, "Buscando actualizaciones..."));
+            progress.Report((0, "Checking for updates..."));
             string json = await http.GetStringAsync(manifestUrl);
             var manifest = JsonSerializer.Deserialize<Manifest>(json,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (manifest?.Files == null)
-                throw new InvalidDataException("Manifest invalido.");
+                throw new InvalidDataException("Invalid manifest.");
 
             string rootFull = System.IO.Path.GetFullPath(root).TrimEnd(System.IO.Path.DirectorySeparatorChar)
                               + System.IO.Path.DirectorySeparatorChar;
@@ -45,7 +45,7 @@ namespace DarkSide.Launcher
                 {
                     string target = System.IO.Path.GetFullPath(System.IO.Path.Combine(rootFull, f.Path));
                     if (!target.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
-                        throw new InvalidDataException("Ruta no permitida en el manifest: " + f.Path);
+                        throw new InvalidDataException("Path not allowed in manifest: " + f.Path);
 
                     if (!File.Exists(target) || !HashMatches(target, f.Sha256))
                         pending.Add((f, target));
@@ -76,21 +76,21 @@ namespace DarkSide.Launcher
                         done += read;
                         double fraction = total > 0 ? (double)done / total : 0;
                         progress.Report(((i + fraction) / pending.Count * 100.0,
-                            $"Descargando {file.Path} ({i + 1}/{pending.Count})"));
+                            $"Downloading {file.Path} ({i + 1}/{pending.Count})"));
                     }
                 }
 
                 if (!string.IsNullOrWhiteSpace(file.Sha256) && !HashMatches(temp, file.Sha256))
                 {
                     File.Delete(temp);
-                    throw new InvalidDataException("Hash incorrecto: " + file.Path);
+                    throw new InvalidDataException("Wrong hash: " + file.Path);
                 }
 
                 if (File.Exists(target)) File.Delete(target);
                 File.Move(temp, target);
             }
 
-            progress.Report((100, "Actualizacion completada"));
+            progress.Report((100, "Update complete"));
         }
 
         private static bool HashMatches(string path, string expected)

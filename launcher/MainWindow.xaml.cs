@@ -19,7 +19,7 @@ namespace DarkSide.Launcher
             {
                 RefreshPath();
                 if (IsInstalled) await RunUpdateAsync();
-                else SetStatus("Cliente no instalado. Pulsa INSTALAR.");
+                else SetStatus("Client not installed. Click INSTALL.");
             };
         }
 
@@ -28,7 +28,7 @@ namespace DarkSide.Launcher
         private void RefreshPath()
         {
             PathBox.Text = _settings.ClientPath;
-            PlayButton.Content = IsInstalled ? "JUGAR" : "INSTALAR";
+            PlayButton.Content = IsInstalled ? "PLAY" : "INSTALL";
         }
 
         private void SetStatus(string text) => StatusText.Text = text;
@@ -45,8 +45,8 @@ namespace DarkSide.Launcher
         {
             var dlg = new OpenFileDialog
             {
-                Title = "Selecciona client.exe de tu instalacion de DARKSIDE",
-                Filter = "Ejecutables (*.exe)|*.exe",
+                Title = "Select client.exe from your DARKSIDE installation",
+                Filter = "Executables (*.exe)|*.exe",
                 CheckFileExists = true
             };
             if (IsInstalled) dlg.InitialDirectory = Path.GetDirectoryName(_settings.ClientPath);
@@ -64,7 +64,7 @@ namespace DarkSide.Launcher
         {
             var dlg = new OpenFolderDialog
             {
-                Title = "Elige donde instalar DARKSIDE (necesita unos 4 GB libres)"
+                Title = "Choose where to install DARKSIDE (about 4 GB free space needed)"
             };
             if (dlg.ShowDialog(this) != true) return false;
 
@@ -81,17 +81,17 @@ namespace DarkSide.Launcher
 
                 string exe = await Installer.InstallAsync(dest, progress);
                 if (string.IsNullOrEmpty(exe))
-                    throw new FileNotFoundException("No se encontro client.exe tras instalar.");
+                    throw new FileNotFoundException("client.exe was not found after installing.");
 
                 _settings.ClientPath = exe;
                 _settings.Save();
                 RefreshPath();
-                SetStatus("Instalacion completada. Ya puedes jugar.");
+                SetStatus("Installation complete. You can play now!");
                 return true;
             }
             catch (Exception ex)
             {
-                SetStatus("Error al instalar: " + ex.Message);
+                SetStatus("Install error: " + ex.Message);
                 return false;
             }
             finally
@@ -106,7 +106,7 @@ namespace DarkSide.Launcher
             if (!IsInstalled) return true;
             if (string.IsNullOrWhiteSpace(_settings.ManifestUrl))
             {
-                SetStatus("Preparado");
+                SetStatus("Ready");
                 return true;
             }
 
@@ -120,11 +120,11 @@ namespace DarkSide.Launcher
                 });
                 await Updater.UpdateAsync(_settings.ManifestUrl, Path.GetDirectoryName(_settings.ClientPath), progress);
                 Bar.Value = 100;
-                SetStatus("Cliente actualizado");
+                SetStatus("Client up to date");
             }
             catch (Exception)
             {
-                SetStatus("Preparado (no se pudo comprobar actualizaciones)");
+                SetStatus("Ready (could not check for updates)");
             }
             finally
             {
@@ -140,7 +140,7 @@ namespace DarkSide.Launcher
             if (!IsInstalled)
             {
                 if (!await InstallAsync()) return;
-                return; // tras instalar, el boton pasa a JUGAR
+                return; // after installing, the button becomes PLAY
             }
 
             await RunUpdateAsync();
@@ -160,7 +160,7 @@ namespace DarkSide.Launcher
             }
             catch (Exception ex)
             {
-                SetStatus("No se pudo iniciar el cliente: " + ex.Message);
+                SetStatus("Could not start the client: " + ex.Message);
             }
         }
 
@@ -169,6 +169,14 @@ namespace DarkSide.Launcher
             if (_busy) return;
             if (PickClient())
                 await RunUpdateAsync();
+        }
+
+        private void Window_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (e.ButtonState == System.Windows.Input.MouseButtonState.Pressed)
+            {
+                try { DragMove(); } catch { }
+            }
         }
 
         private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;

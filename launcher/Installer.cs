@@ -24,7 +24,7 @@ namespace DarkSide.Launcher
             {
                 var drive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(destRoot)));
                 if (drive.AvailableFreeSpace < RequiredBytes)
-                    throw new IOException("Espacio insuficiente: se necesitan unos 4 GB libres en " + drive.Name);
+                    throw new IOException("Not enough disk space: about 4 GB free is needed on " + drive.Name);
             }
             catch (ArgumentException) { }
 
@@ -54,7 +54,7 @@ namespace DarkSide.Launcher
                         {
                             lastPct = pct;
                             progress.Report((pct * 0.5,
-                                $"Descargando cliente... {done / 1048576} / {total / 1048576} MB"));
+                                $"Downloading client... {done / 1048576} / {total / 1048576} MB"));
                         }
                     }
                 }
@@ -78,14 +78,14 @@ namespace DarkSide.Launcher
                     if (pct != lastPct)
                     {
                         lastPct = pct;
-                        progress.Report((50 + pct * 0.5, $"Instalando archivos... {i} / {entries.Count}"));
+                        progress.Report((50 + pct * 0.5, $"Installing files... {i} / {entries.Count}"));
                     }
                 }
             });
 
             try { File.Delete(rarPath); } catch { }
 
-            progress.Report((100, "Instalacion completada"));
+            progress.Report((100, "Installation complete"));
             return FindClient(destRoot);
         }
 
