@@ -1,160 +1,178 @@
-<Window x:Class="DarkSide.Launcher.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="DARKSIDE" WindowStyle="None" WindowState="Maximized"
-        ResizeMode="NoResize" Background="Black"
-        WindowStartupLocation="CenterScreen">
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Threading.Tasks;
+using System.Windows;
+using Microsoft.Win32;
 
-    <Window.Resources>
+namespace DarkSide.Launcher
+{
+    public partial class MainWindow : Window
+    {
+        private readonly LauncherSettings _settings = LauncherSettings.Load();
+        private bool _busy;
 
-        <!-- Boton principal JUGAR: negro, plata y rojo -->
-        <Style x:Key="PlayButton" TargetType="Button">
-            <Setter Property="Foreground" Value="#E8EAF0"/>
-            <Setter Property="FontFamily" Value="Georgia"/>
-            <Setter Property="FontSize" Value="30"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" CornerRadius="4" BorderThickness="2" BorderBrush="#B8BCC8"
-                                Padding="0,12">
-                            <Border.Background>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                    <GradientStop Color="#6A0F18" Offset="0"/>
-                                    <GradientStop Color="#1A0509" Offset="1"/>
-                                </LinearGradientBrush>
-                            </Border.Background>
-                            <Border.Effect>
-                                <DropShadowEffect Color="#FF2030" BlurRadius="18" ShadowDepth="0" Opacity="0.5"/>
-                            </Border.Effect>
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#7FA4FF"/>
-                                <Setter TargetName="Bd" Property="Background">
-                                    <Setter.Value>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                            <GradientStop Color="#A01824" Offset="0"/>
-                                            <GradientStop Color="#2A070D" Offset="1"/>
-                                        </LinearGradientBrush>
-                                    </Setter.Value>
-                                </Setter>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.8"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.4"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+        public MainWindow()
+        {
+            InitializeComponent();
+            Loaded += async (s, e) =>
+            {
+                RefreshPath();
+                if (IsInstalled) await RunUpdateAsync();
+                else SetStatus("Cliente no instalado. Pulsa INSTALAR.");
+            };
+        }
 
-        <!-- Botones pequenos: azul/plata -->
-        <Style x:Key="SmallButton" TargetType="Button">
-            <Setter Property="Foreground" Value="#C9D3F5"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="#CC0A0C18" BorderBrush="#5E6A9A"
-                                BorderThickness="1" CornerRadius="3" Padding="10,6">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#7FA4FF"/>
-                                <Setter TargetName="Bd" Property="Background" Value="#EE15183A"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+        private bool IsInstalled => File.Exists(_settings.ClientPath);
 
-        <!-- Botones de ventana (minimizar / cerrar) -->
-        <Style x:Key="WinButton" TargetType="Button">
-            <Setter Property="Foreground" Value="#C9D3F5"/>
-            <Setter Property="FontSize" Value="16"/>
-            <Setter Property="Width" Value="42"/>
-            <Setter Property="Height" Value="32"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="#880A0C18" BorderBrush="#5E6A9A" BorderThickness="1">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#CC8A1220"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#FF5060"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+        private void RefreshPath()
+        {
+            PathBox.Text = _settings.ClientPath;
+            PlayButton.Content = IsInstalled ? "JUGAR" : "INSTALAR";
+        }
 
-    </Window.Resources>
+        private void SetStatus(string text) => StatusText.Text = text;
 
-    <Grid>
-        <!-- FONDO OFICIAL (sin modificar) -->
-        <Image Source="Assets/background.png" Stretch="UniformToFill"
-               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        private void SetBusy(bool busy)
+        {
+            _busy = busy;
+            PlayButton.IsEnabled = !busy;
+            BrowseButton.IsEnabled = !busy;
+        }
 
-        <!-- Degradado suave abajo para que se lean los controles (no toca castillos ni logo) -->
-        <Rectangle VerticalAlignment="Bottom" Height="260" IsHitTestVisible="False">
-            <Rectangle.Fill>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                    <GradientStop Color="#00000000" Offset="0"/>
-                    <GradientStop Color="#CC000000" Offset="1"/>
-                </LinearGradientBrush>
-            </Rectangle.Fill>
-        </Rectangle>
+        // Elegir manualmente un cliente ya instalado
+        private bool PickClient()
+        {
+            var dlg = new OpenFileDialog
+            {
+                Title = "Selecciona client.exe de tu instalacion de DARKSIDE",
+                Filter = "Ejecutables (*.exe)|*.exe",
+                CheckFileExists = true
+            };
+            if (IsInstalled) dlg.InitialDirectory = Path.GetDirectoryName(_settings.ClientPath);
 
-        <!-- Minimizar / Cerrar -->
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top"
-                    Margin="0,12,14,0">
-            <Button Style="{StaticResource WinButton}" Content="&#x2014;" Click="Minimize_Click" Margin="0,0,6,0"/>
-            <Button Style="{StaticResource WinButton}" Content="&#x2715;" Click="Close_Click"/>
-        </StackPanel>
+            if (dlg.ShowDialog(this) != true) return false;
 
-        <!-- Panel inferior central -->
-        <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Center" Width="520" Margin="0,0,0,48">
+            _settings.ClientPath = dlg.FileName;
+            _settings.Save();
+            RefreshPath();
+            return true;
+        }
 
-            <TextBlock x:Name="StatusText" Text="Preparado" Foreground="#C9D3F5" FontSize="15"
-                       FontFamily="Georgia" HorizontalAlignment="Center" Margin="0,0,0,8">
-                <TextBlock.Effect>
-                    <DropShadowEffect Color="Black" BlurRadius="6" ShadowDepth="1"/>
-                </TextBlock.Effect>
-            </TextBlock>
+        // Descarga e instala el cliente completo desde GitHub
+        private async Task<bool> InstallAsync()
+        {
+            var dlg = new OpenFolderDialog
+            {
+                Title = "Elige donde instalar DARKSIDE (necesita unos 4 GB libres)"
+            };
+            if (dlg.ShowDialog(this) != true) return false;
 
-            <ProgressBar x:Name="Bar" Height="5" Minimum="0" Maximum="100" Value="0"
-                         Background="#66000000" BorderBrush="#5E6A9A" BorderThickness="1"
-                         Foreground="#FF3040" Margin="0,0,0,16"/>
+            string dest = Path.Combine(dlg.FolderName, "DARKSIDE");
 
-            <Button x:Name="PlayButton" Style="{StaticResource PlayButton}" Content="JUGAR"
-                    Click="Play_Click"/>
+            SetBusy(true);
+            try
+            {
+                var progress = new Progress<(double, string)>(p =>
+                {
+                    Bar.Value = p.Item1;
+                    SetStatus(p.Item2);
+                });
 
-            <Grid Margin="0,16,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBox x:Name="PathBox" IsReadOnly="True" Background="#CC0A0C18" Foreground="#C9D3F5"
-                         BorderBrush="#5E6A9A" Padding="8,6" FontSize="13" VerticalContentAlignment="Center"/>
-                <Button x:Name="BrowseButton" Grid.Column="1" Style="{StaticResource SmallButton}" Content="Cliente..."
-                        Margin="8,0,0,0" Click="Browse_Click"/>
-            </Grid>
+                string exe = await Installer.InstallAsync(dest, progress);
+                if (string.IsNullOrEmpty(exe))
+                    throw new FileNotFoundException("No se encontro client.exe tras instalar.");
 
-            <TextBlock Text="DARKSIDE · ULTIMA ONLINE" Foreground="#8E97B8" FontSize="12"
-                       HorizontalAlignment="Center" Margin="0,14,0,0"/>
-        </StackPanel>
-    </Grid>
-</Window>
+                _settings.ClientPath = exe;
+                _settings.Save();
+                RefreshPath();
+                SetStatus("Instalacion completada. Ya puedes jugar.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                SetStatus("Error al instalar: " + ex.Message);
+                return false;
+            }
+            finally
+            {
+                SetBusy(false);
+            }
+        }
+
+        // Actualizaciones por manifest. Si falla, NO bloquea el juego.
+        private async Task<bool> RunUpdateAsync()
+        {
+            if (!IsInstalled) return true;
+            if (string.IsNullOrWhiteSpace(_settings.ManifestUrl))
+            {
+                SetStatus("Preparado");
+                return true;
+            }
+
+            SetBusy(true);
+            try
+            {
+                var progress = new Progress<(double, string)>(p =>
+                {
+                    Bar.Value = p.Item1;
+                    SetStatus(p.Item2);
+                });
+                await Updater.UpdateAsync(_settings.ManifestUrl, Path.GetDirectoryName(_settings.ClientPath), progress);
+                Bar.Value = 100;
+                SetStatus("Cliente actualizado");
+            }
+            catch (Exception)
+            {
+                SetStatus("Preparado (no se pudo comprobar actualizaciones)");
+            }
+            finally
+            {
+                SetBusy(false);
+            }
+            return true;
+        }
+
+        private async void Play_Click(object sender, RoutedEventArgs e)
+        {
+            if (_busy) return;
+
+            if (!IsInstalled)
+            {
+                if (!await InstallAsync()) return;
+                return; // tras instalar, el boton pasa a JUGAR
+            }
+
+            await RunUpdateAsync();
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = _settings.ClientPath,
+                    Arguments = _settings.Arguments ?? "",
+                    WorkingDirectory = Path.GetDirectoryName(_settings.ClientPath),
+                    UseShellExecute = true
+                });
+
+                if (_settings.CloseOnPlay) Close();
+                else WindowState = WindowState.Minimized;
+            }
+            catch (Exception ex)
+            {
+                SetStatus("No se pudo iniciar el cliente: " + ex.Message);
+            }
+        }
+
+        private async void Browse_Click(object sender, RoutedEventArgs e)
+        {
+            if (_busy) return;
+            if (PickClient())
+                await RunUpdateAsync();
+        }
+
+        private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+        private void Close_Click(object sender, RoutedEventArgs e) => Close();
+    }
+}
