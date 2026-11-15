@@ -1,0 +1,10 @@
+{
+  "version": "1.0.0",
+  "files": [
+    {
+      "path": "Data/ejemplo.mul",
+      "url": "https://tu-servidor.com/updates/Data/ejemplo.mul",
+      "sha256": "HASH_SHA256_DEL_ARCHIVO"
+    }
+  ]
+}
