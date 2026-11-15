@@ -15,7 +15,7 @@
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
-                <Setter.Template>
+                <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Bd" CornerRadius="4" BorderThickness="2" BorderBrush="#B8BCC8"
                                 Padding="0,12">
@@ -60,7 +60,7 @@
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
-                <Setter.Template>
+                <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Bd" Background="#CC0A0C18" BorderBrush="#5E6A9A"
                                 BorderThickness="1" CornerRadius="3" Padding="10,6">
@@ -85,7 +85,7 @@
             <Setter Property="Height" Value="32"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
-                <Setter.Template>
+                <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Bd" Background="#880A0C18" BorderBrush="#5E6A9A" BorderThickness="1">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
