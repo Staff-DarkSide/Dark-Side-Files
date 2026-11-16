@@ -1,4 +1,4 @@
-name: Build DARKSIDE Installer
+name: Build DARKSIDE Launcher
 
 on:
   push:
@@ -31,27 +31,17 @@ jobs:
           New-Item -ItemType Directory -Force -Path Assets | Out-Null
           if (Test-Path background.png) { Copy-Item background.png Assets/background.png -Force }
 
-      - name: Publish (win-x64)
+      - name: Publish (win-x64, single file)
         shell: pwsh
         run: dotnet publish DarkSideLauncher.csproj -c Release -r win-x64 --self-contained true -p:Version=${{ steps.ver.outputs.version }} -o publish
 
-      - name: Install Inno Setup
-        shell: pwsh
-        run: choco install innosetup --no-progress -y
-
-      - name: Build installer
-        shell: pwsh
-        run: |
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ steps.ver.outputs.version }}" "/DPublishDir=$PWD\publish" "/O$PWD\dist" "DarkSide.iss"
-          if (!(Test-Path dist\DARKSIDE-Setup.exe)) { throw "Installer not generated" }
-
       - uses: actions/upload-artifact@v4
         with:
-          name: DARKSIDE-Setup
-          path: dist/DARKSIDE-Setup.exe
+          name: DarkSideLauncher
+          path: publish/DarkSideLauncher.exe
 
       - name: Publish release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/DARKSIDE-Setup.exe
+          files: publish/DarkSideLauncher.exe
