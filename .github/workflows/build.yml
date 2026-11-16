@@ -371,14 +371,14 @@ jobs:
                   DownloadBar.Visibility = busy ? Visibility.Visible : Visibility.Hidden;
                   DownloadBar.IsIndeterminate = s == State.Checking;
                   DownloadBar.Value = 0;
-                  MainButton.IsEnabled = !busy;
+                  MainButton.IsEnabled = !busy && s != State.Ready;
                   BrowseButton.IsEnabled = !busy;
                   MainButton.Content = s switch
                   {
                       State.NotInstalled => "INSTALL",
                       State.UpdateAvailable => "UPDATE",
                       State.Repair => "REPAIR",
-                      State.Ready => "PLAY",
+                      State.Ready => "UP TO DATE",
                       _ => "PLEASE WAIT"
                   };
               }
