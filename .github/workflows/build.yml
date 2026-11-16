@@ -25,9 +25,15 @@ jobs:
           if ("${{ github.ref_type }}" -eq "tag") { $v = "${{ github.ref_name }}" -replace '^launcher-v','' } else { $v = "1.0.0" }
           "version=$v" >> $env:GITHUB_OUTPUT
 
+      - name: Prepare assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path Assets | Out-Null
+          if (Test-Path background.png) { Copy-Item background.png Assets/background.png -Force }
+
       - name: Publish (win-x64)
         shell: pwsh
-        run: dotnet publish launcher/DarkSideLauncher.csproj -c Release -r win-x64 --self-contained true -p:Version=${{ steps.ver.outputs.version }} -o publish
+        run: dotnet publish DarkSideLauncher.csproj -c Release -r win-x64 --self-contained true -p:Version=${{ steps.ver.outputs.version }} -o publish
 
       - name: Install Inno Setup
         shell: pwsh
@@ -36,7 +42,7 @@ jobs:
       - name: Build installer
         shell: pwsh
         run: |
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ steps.ver.outputs.version }}" "/DPublishDir=$PWD\publish" "/O$PWD\dist" "launcher\DarkSide.iss"
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ steps.ver.outputs.version }}" "/DPublishDir=$PWD\publish" "/O$PWD\dist" "DarkSide.iss"
           if (!(Test-Path dist\DARKSIDE-Setup.exe)) { throw "Installer not generated" }
 
       - uses: actions/upload-artifact@v4
