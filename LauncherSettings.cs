@@ -21,12 +21,13 @@ public sealed class LauncherSettings
     public const string GameExecutable = "";               // "" = auto-detect (ClassicUO.exe, Razor.exe, client.exe...)
     public const string GameArguments = "";
 
-    // Launcher self-update: GitHub Releases with tag "launcher-v1.0.1" and asset DARKSIDE-Setup.exe
+    // Launcher self-update: GitHub Releases with tag "launcher-v1.0.1" and asset DarkSideLauncher.exe
     public const string LauncherTagPrefix = "launcher-v";
-    public const string InstallerAssetName = "DARKSIDE-Setup.exe";
+    public const string InstallerAssetName = "DarkSideLauncher.exe";
     // =====================
 
     public const string ExtractingMarker = ".extracting";
+    public const string ManifestName = ".darkside-manifest.txt";
 
     private static readonly string[] KnownGameExecutables =
     {
@@ -73,7 +74,9 @@ public sealed class LauncherSettings
     public static string DataDir =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DARKSIDE");
 
-    public static string DefaultInstallPath => Path.Combine(DataDir, "Client");
+    // Portable: the game goes in a "Client" folder next to the launcher .exe
+    public static string DefaultInstallPath => Path.Combine(
+        Path.GetDirectoryName(Environment.ProcessPath) ?? DataDir, "Client");
 
     private static string FilePath => Path.Combine(DataDir, "settings.json");
 
