@@ -1,553 +1,3 @@
-name: Build DARKSIDE Launcher
-
-on:
-  push:
-    tags: ["launcher-v*"]
-  workflow_dispatch:
-
-permissions:
-  contents: write
-
-jobs:
-  build:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-
-      - name: Generate launcher project
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path _launcher/Assets | Out-Null
-          $bg = Get-ChildItem -Path . -Recurse -Filter background.png -File | Where-Object { $_.FullName -notlike '*_launcher*' } | Select-Object -First 1
-          if (-not $bg) { throw "background.png not found in the repository. Upload it to the repo (any folder)." }
-          Copy-Item $bg.FullName _launcher/Assets/background.png
-
-          Set-Content -Path _launcher/DarkSideLauncher.csproj -Encoding utf8 -Value @'
-          <Project Sdk="Microsoft.NET.Sdk">
-
-            <PropertyGroup>
-              <OutputType>WinExe</OutputType>
-              <TargetFramework>net8.0-windows</TargetFramework>
-              <UseWPF>true</UseWPF>
-              <Nullable>enable</Nullable>
-              <ImplicitUsings>enable</ImplicitUsings>
-              <AssemblyName>DarkSideLauncher</AssemblyName>
-              <RootNamespace>DarkSideLauncher</RootNamespace>
-              <Version>1.0.0</Version>
-              <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-              <SelfContained>true</SelfContained>
-              <PublishSingleFile>true</PublishSingleFile>
-              <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-              <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
-              <DebugType>none</DebugType>
-              <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-            </PropertyGroup>
-
-            <ItemGroup>
-              <PackageReference Include="SharpCompress" Version="0.38.0" />
-            </ItemGroup>
-
-            <ItemGroup>
-              <Resource Include="Assets\background.png" />
-            </ItemGroup>
-
-          </Project>
-          '@
-
-          Set-Content -Path _launcher/App.xaml -Encoding utf8 -Value @'
-          <Application x:Class="DarkSideLauncher.App"
-                       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                       StartupUri="MainWindow.xaml">
-              <Application.Resources />
-          </Application>
-          '@
-
-          Set-Content -Path _launcher/App.xaml.cs -Encoding utf8 -Value @'
-          using System.IO;
-          using System.Windows;
-
-          namespace DarkSideLauncher;
-
-          public partial class App : Application
-          {
-              private static Mutex? _mutex;
-
-              protected override void OnStartup(StartupEventArgs e)
-              {
-                  _mutex = new Mutex(true, "DARKSIDE_Launcher_SingleInstance", out var isNew);
-                  if (!isNew)
-                  {
-                      Shutdown();
-                      return;
-                  }
-
-                  DispatcherUnhandledException += (_, args) =>
-                  {
-                      Log(args.Exception);
-                      MessageBox.Show(args.Exception.Message, "DARKSIDE", MessageBoxButton.OK, MessageBoxImage.Error);
-                      args.Handled = true;
-                  };
-
-                  base.OnStartup(e);
-              }
-
-              public static void Log(Exception ex)
-              {
-                  try
-                  {
-                      Directory.CreateDirectory(LauncherSettings.DataDir);
-                      File.AppendAllText(
-                          Path.Combine(LauncherSettings.DataDir, "launcher.log"),
-                          $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex}{Environment.NewLine}{Environment.NewLine}");
-                  }
-                  catch { }
-              }
-          }
-          '@
-
-          Set-Content -Path _launcher/MainWindow.xaml -Encoding utf8 -Value @'
-          <Window x:Class="DarkSideLauncher.MainWindow"
-                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                  Title="DARKSIDE Launcher" Width="1100" Height="620"
-                  WindowStyle="None" ResizeMode="CanMinimize"
-                  WindowStartupLocation="CenterScreen" Background="#05050A"
-                  MouseLeftButtonDown="Window_MouseLeftButtonDown">
-
-              <Window.Resources>
-                  <Style x:Key="MainButton" TargetType="Button">
-                      <Setter Property="Foreground" Value="#F3E9E9"/>
-                      <Setter Property="FontFamily" Value="Georgia"/>
-                      <Setter Property="FontSize" Value="20"/>
-                      <Setter Property="FontWeight" Value="Bold"/>
-                      <Setter Property="Cursor" Value="Hand"/>
-                      <Setter Property="Template">
-                          <Setter.Value>
-                              <ControlTemplate TargetType="Button">
-                                  <Border x:Name="Bd" CornerRadius="2" BorderThickness="1"
-                                          BorderBrush="#C05050" Background="#8B1A1F">
-                                      <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                  </Border>
-                                  <ControlTemplate.Triggers>
-                                      <Trigger Property="IsMouseOver" Value="True">
-                                          <Setter TargetName="Bd" Property="Background" Value="#B02228"/>
-                                      </Trigger>
-                                      <Trigger Property="IsEnabled" Value="False">
-                                          <Setter TargetName="Bd" Property="Background" Value="#3A2224"/>
-                                          <Setter Property="Foreground" Value="#888888"/>
-                                      </Trigger>
-                                  </ControlTemplate.Triggers>
-                              </ControlTemplate>
-                          </Setter.Value>
-                      </Setter>
-                  </Style>
-
-                  <Style x:Key="GhostButton" TargetType="Button">
-                      <Setter Property="Foreground" Value="#DDDDDD"/>
-                      <Setter Property="Background" Value="#CC0A0A12"/>
-                      <Setter Property="BorderBrush" Value="#66FFFFFF"/>
-                      <Setter Property="Padding" Value="10,4"/>
-                      <Setter Property="Cursor" Value="Hand"/>
-                      <Setter Property="Template">
-                          <Setter.Value>
-                              <ControlTemplate TargetType="Button">
-                                  <Border x:Name="Bd" Background="{TemplateBinding Background}"
-                                          BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
-                                          Padding="{TemplateBinding Padding}">
-                                      <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                  </Border>
-                                  <ControlTemplate.Triggers>
-                                      <Trigger Property="IsMouseOver" Value="True">
-                                          <Setter TargetName="Bd" Property="Background" Value="#CC2A2A3A"/>
-                                      </Trigger>
-                                      <Trigger Property="IsEnabled" Value="False">
-                                          <Setter Property="Opacity" Value="0.5"/>
-                                      </Trigger>
-                                  </ControlTemplate.Triggers>
-                              </ControlTemplate>
-                          </Setter.Value>
-                      </Setter>
-                  </Style>
-              </Window.Resources>
-
-              <Grid>
-                  <Image Source="/Assets/background.png" Stretch="UniformToFill"/>
-
-                  <Rectangle>
-                      <Rectangle.Fill>
-                          <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                              <GradientStop Color="#00000000" Offset="0.55"/>
-                              <GradientStop Color="#CC000000" Offset="1"/>
-                          </LinearGradientBrush>
-                      </Rectangle.Fill>
-                  </Rectangle>
-
-                  <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
-                              VerticalAlignment="Top" Margin="0,8,8,0">
-                      <Button Style="{StaticResource GhostButton}" Content="—" Width="30" Height="24"
-                              Padding="0" Margin="0,0,4,0" Click="Min_Click"/>
-                      <Button Style="{StaticResource GhostButton}" Content="✕" Width="30" Height="24"
-                              Padding="0" Click="Close_Click"/>
-                  </StackPanel>
-
-                  <StackPanel VerticalAlignment="Bottom" HorizontalAlignment="Center"
-                              Width="420" Margin="0,0,0,22">
-                      <TextBlock x:Name="StatusText" Text="Starting..." Foreground="#E8E0E0"
-                                 FontFamily="Georgia" FontSize="13" HorizontalAlignment="Center"
-                                 TextTrimming="CharacterEllipsis" Margin="0,0,0,8"/>
-
-                      <ProgressBar x:Name="DownloadBar" Height="4" Minimum="0" Maximum="100"
-                                   BorderThickness="0" Foreground="#C0262D" Background="#33FFFFFF"
-                                   Visibility="Hidden" Margin="0,0,0,8"/>
-
-                      <Button x:Name="MainButton" Style="{StaticResource MainButton}" Height="44"
-                              Content="PLEASE WAIT" IsEnabled="False" Click="MainButton_Click"/>
-
-                      <Grid Margin="0,8,0,0">
-                          <Grid.ColumnDefinitions>
-                              <ColumnDefinition Width="*"/>
-                              <ColumnDefinition Width="Auto"/>
-                          </Grid.ColumnDefinitions>
-                          <TextBox x:Name="PathBox" IsReadOnly="True" Background="#CC0A0A12"
-                                   Foreground="#DDDDDD" BorderBrush="#66FFFFFF" Padding="6,4"
-                                   VerticalContentAlignment="Center" FontSize="12"/>
-                          <Button x:Name="BrowseButton" Grid.Column="1" Style="{StaticResource GhostButton}"
-                                  Content="Browse..." Margin="6,0,0,0" Click="Browse_Click"/>
-                      </Grid>
-
-                      <TextBlock x:Name="FooterText" Foreground="#99FFFFFF" FontSize="10"
-                                 HorizontalAlignment="Center" Margin="0,10,0,0"/>
-                  </StackPanel>
-              </Grid>
-          </Window>
-          '@
-
-          Set-Content -Path _launcher/MainWindow.xaml.cs -Encoding utf8 -Value @'
-          using System.Diagnostics;
-          using System.IO;
-          using System.Windows;
-          using System.Windows.Input;
-          using Microsoft.Win32;
-
-          namespace DarkSideLauncher;
-
-          public partial class MainWindow : Window
-          {
-              private enum State { Checking, NotInstalled, UpdateAvailable, Repair, Ready, Busy }
-
-              private readonly LauncherSettings _settings = LauncherSettings.Load();
-              private readonly CancellationTokenSource _cts = new();
-              private State _state = State.Checking;
-              private List<string> _damaged = new();
-
-              public MainWindow()
-              {
-                  InitializeComponent();
-                  PathBox.Text = _settings.InstallPath;
-                  FooterText.Text = $"DARKSIDE · ULTIMA ONLINE · v{Updater.CurrentVersion}";
-                  Loaded += async (_, _) => await StartupAsync();
-                  Closing += (_, _) => _cts.Cancel();
-              }
-
-              private async Task StartupAsync()
-              {
-                  SetState(State.Checking, "Checking for launcher updates...");
-                  try
-                  {
-                      var update = await Updater.CheckAsync(_cts.Token);
-                      if (update != null &&
-                          MessageBox.Show(this,
-                              $"A new launcher version ({update.Version}) is available.\nUpdate now?",
-                              "DARKSIDE", MessageBoxButton.YesNo, MessageBoxImage.Information) == MessageBoxResult.Yes)
-                      {
-                          SetState(State.Busy, "Downloading launcher update...");
-                          await Updater.DownloadAndRunAsync(update, new Progress<InstallProgress>(OnProgress), _cts.Token);
-                          Application.Current.Shutdown();
-                          return;
-                      }
-                  }
-                  catch (OperationCanceledException) { return; }
-                  catch (Exception ex) { App.Log(ex); }
-
-                  await RefreshClientStateAsync();
-              }
-
-              private async Task RefreshClientStateAsync()
-              {
-                  if (!_settings.IsClientInstalled)
-                  {
-                      SetState(State.NotInstalled, "Client not installed. Press INSTALL.");
-                      return;
-                  }
-
-                  SetState(State.Checking, "Verifying game files...");
-                  try
-                  {
-                      var path = _settings.InstallPath;
-                      var progress = new Progress<InstallProgress>(OnProgress);
-
-                      var remote = await Installer.GetRemoteFilesAsync(_cts.Token);
-                      var outdated = await Installer.FindOutdatedAsync(path, remote, progress, _cts.Token);
-
-                      var skip = new HashSet<string>(remote.Select(r => r.RelativePath), StringComparer.OrdinalIgnoreCase);
-                      _damaged = await Task.Run(() => Installer.FindDamagedBaseFiles(path, skip), _cts.Token);
-
-                      if (_damaged.Count > 0)
-                          SetState(State.Repair, $"{_damaged.Count} game files are missing or damaged. Press REPAIR.");
-                      else if (outdated.Count > 0)
-                          SetState(State.UpdateAvailable, $"Update available ({outdated.Count} files).");
-                      else
-                          SetState(State.Ready, "Client up to date.");
-                  }
-                  catch (OperationCanceledException) { }
-                  catch (Exception ex)
-                  {
-                      App.Log(ex);
-                      SetState(State.Ready, "Could not check for updates. You can still play.");
-                  }
-              }
-
-              private async Task InstallAsync()
-              {
-                  var path = PathBox.Text.Trim();
-                  if (string.IsNullOrWhiteSpace(path))
-                      throw new InvalidOperationException("Select an install folder.");
-
-                  Directory.CreateDirectory(path);
-                  _settings.InstallPath = path;
-                  _settings.Save();
-
-                  var progress = new Progress<InstallProgress>(OnProgress);
-
-                  if (!_settings.IsClientInstalled)
-                  {
-                      SetState(State.Busy, "Downloading game...");
-                      await Installer.InstallBaseGameAsync(path, progress, _cts.Token);
-                  }
-                  else if (_damaged.Count > 0)
-                  {
-                      SetState(State.Busy, "Repairing game files...");
-                      await Installer.InstallBaseGameAsync(path, progress, _cts.Token,
-                          new HashSet<string>(_damaged, StringComparer.OrdinalIgnoreCase));
-                      _damaged = new List<string>();
-                  }
-
-                  SetState(State.Busy, "Checking updates...");
-                  var remote = await Installer.GetRemoteFilesAsync(_cts.Token);
-                  var outdated = await Installer.FindOutdatedAsync(path, remote, progress, _cts.Token);
-                  await Installer.DownloadAsync(path, outdated, progress, _cts.Token);
-
-                  SetState(State.Ready, "Installation complete.");
-              }
-
-              private void Play()
-              {
-                  var exe = _settings.GameExePath;
-                  if (exe == null)
-                  {
-                      SetState(State.NotInstalled, "Game executable not found. Press INSTALL.");
-                      return;
-                  }
-
-                  Process.Start(new ProcessStartInfo(exe, LauncherSettings.GameArguments)
-                  {
-                      WorkingDirectory = Path.GetDirectoryName(exe)!,
-                      UseShellExecute = true
-                  });
-                  Application.Current.Shutdown();
-              }
-
-              private void SetState(State s, string status)
-              {
-                  _state = s;
-                  StatusText.Text = status;
-
-                  bool busy = s is State.Busy or State.Checking;
-                  DownloadBar.Visibility = busy ? Visibility.Visible : Visibility.Hidden;
-                  DownloadBar.IsIndeterminate = s == State.Checking;
-                  DownloadBar.Value = 0;
-                  MainButton.IsEnabled = !busy;
-                  BrowseButton.IsEnabled = !busy;
-                  MainButton.Content = s switch
-                  {
-                      State.NotInstalled => "INSTALL",
-                      State.UpdateAvailable => "UPDATE",
-                      State.Repair => "REPAIR",
-                      State.Ready => "PLAY",
-                      _ => "PLEASE WAIT"
-                  };
-              }
-
-              private void OnProgress(InstallProgress p)
-              {
-                  StatusText.Text = p.Message;
-                  if (_state == State.Busy) DownloadBar.Value = p.Percent;
-              }
-
-              private async void MainButton_Click(object sender, RoutedEventArgs e)
-              {
-                  try
-                  {
-                      switch (_state)
-                      {
-                          case State.NotInstalled:
-                          case State.UpdateAvailable:
-                          case State.Repair:
-                              await InstallAsync();
-                              break;
-                          case State.Ready:
-                              Play();
-                              break;
-                      }
-                  }
-                  catch (OperationCanceledException) { }
-                  catch (Exception ex)
-                  {
-                      App.Log(ex);
-                      SetState(_settings.IsClientInstalled ? State.UpdateAvailable : State.NotInstalled,
-                               "Error: " + ex.Message);
-                  }
-              }
-
-              private async void Browse_Click(object sender, RoutedEventArgs e)
-              {
-                  var dlg = new OpenFolderDialog
-                  {
-                      Title = "Select the DARKSIDE client folder",
-                      InitialDirectory = Directory.Exists(PathBox.Text) ? PathBox.Text : string.Empty
-                  };
-                  if (dlg.ShowDialog(this) != true) return;
-
-                  PathBox.Text = dlg.FolderName;
-                  _settings.InstallPath = dlg.FolderName;
-                  _settings.Save();
-                  await RefreshClientStateAsync();
-              }
-
-              private void Min_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
-
-              private void Close_Click(object sender, RoutedEventArgs e) => Close();
-
-              private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-              {
-                  if (e.ButtonState == MouseButtonState.Pressed) DragMove();
-              }
-          }
-          '@
-
-          Set-Content -Path _launcher/LauncherSettings.cs -Encoding utf8 -Value @'
-          using System.IO;
-          using System.Text.Json;
-          using System.Text.Json.Serialization;
-
-          namespace DarkSideLauncher;
-
-          public sealed class LauncherSettings
-          {
-              // ===== EDIT HERE =====
-              public const string RepoOwner = "Staff-DarkSide";
-              public const string RepoName = "Dark-Side-Files";
-              public const string Branch = "main";
-
-              public const string GameArchiveUrl = "https://github.com/Staff-DarkSide/Dark-Side-Files/releases/download/v1.0.0/Dark.side.uo.rar";
-              public const string GameArchiveName = "Dark.side.uo.rar";
-
-              public const string ClientSubfolder = "updates";
-
-              public const string GameExecutable = "";
-              public const string GameArguments = "";
-
-              public const string LauncherTagPrefix = "launcher-v";
-              public const string InstallerAssetName = "DarkSideLauncher.exe";
-              // =====================
-
-              public const string ExtractingMarker = ".extracting";
-              public const string ManifestName = ".darkside-manifest.txt";
-
-              private static readonly string[] KnownGameExecutables =
-              {
-                  "ClassicUO.exe", "OrionUO.exe", "Razor.exe", "client.exe"
-              };
-
-              public string InstallPath { get; set; } = DefaultInstallPath;
-
-              [JsonIgnore]
-              public string? GameExePath
-              {
-                  get
-                  {
-                      try
-                      {
-                          if (!Directory.Exists(InstallPath)) return null;
-
-                          if (GameExecutable.Length > 0)
-                          {
-                              var fixedPath = Path.Combine(InstallPath, GameExecutable);
-                              return File.Exists(fixedPath) ? fixedPath : null;
-                          }
-
-                          foreach (var name in KnownGameExecutables)
-                          {
-                              var p = Path.Combine(InstallPath, name);
-                              if (File.Exists(p)) return p;
-                          }
-
-                          return Directory.EnumerateFiles(InstallPath, "*.exe", SearchOption.TopDirectoryOnly)
-                              .FirstOrDefault(f => !Path.GetFileName(f).StartsWith("unins", StringComparison.OrdinalIgnoreCase));
-                      }
-                      catch
-                      {
-                          return null;
-                      }
-                  }
-              }
-
-              [JsonIgnore]
-              public bool IsClientInstalled =>
-                  GameExePath != null && !File.Exists(Path.Combine(InstallPath, ExtractingMarker));
-
-              public static string DataDir =>
-                  Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DARKSIDE");
-
-              // Portable: the game goes in a "Client" folder next to the launcher .exe
-              public static string DefaultInstallPath => Path.Combine(
-                  Path.GetDirectoryName(Environment.ProcessPath) ?? DataDir, "Client");
-
-              private static string FilePath => Path.Combine(DataDir, "settings.json");
-
-              public static LauncherSettings Load()
-              {
-                  var s = new LauncherSettings();
-                  try
-                  {
-                      if (File.Exists(FilePath))
-                          s = JsonSerializer.Deserialize<LauncherSettings>(File.ReadAllText(FilePath)) ?? s;
-                  }
-                  catch { }
-
-                  if (string.IsNullOrWhiteSpace(s.InstallPath))
-                      s.InstallPath = DefaultInstallPath;
-                  return s;
-              }
-
-              public void Save()
-              {
-                  try
-                  {
-                      Directory.CreateDirectory(DataDir);
-                      File.WriteAllText(FilePath,
-                          JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true }));
-                  }
-                  catch { }
-              }
-          }
-          '@
-
           Set-Content -Path _launcher/Installer.cs -Encoding utf8 -Value @'
           using System.IO;
           using System.Net;
@@ -598,10 +48,11 @@ jobs:
                   var marker = Path.Combine(installPath, LauncherSettings.ExtractingMarker);
                   if (only == null) File.WriteAllText(marker, "");
 
-                  List<(string Rel, long Size)> written;
+                  List<(string Rel, long Size)> expected;
+                  string strip;
                   try
                   {
-                      written = await Task.Run(() => Extract(rar, installPath, only, progress, ct), ct);
+                      (expected, strip) = await Task.Run(() => Extract(rar, installPath, only, progress, ct), ct);
                   }
                   catch (OperationCanceledException)
                   {
@@ -613,15 +64,45 @@ jobs:
                       throw;
                   }
 
+                  // Verify that EVERY file of the archive exists with the exact size.
+                  var missing = FindMissing(installPath, expected);
+                  if (missing.Count > 0)
+                  {
+                      progress?.Report(new InstallProgress(100, $"Recovering {missing.Count} files..."));
+                      var wanted = new HashSet<string>(missing.Select(m => m.Rel), StringComparer.OrdinalIgnoreCase);
+                      await Task.Run(() => ExtractSome(rar, installPath, strip, wanted, ct), ct);
+                      missing = FindMissing(installPath, expected);
+                  }
+
+                  if (missing.Count > 0)
+                  {
+                      var names = string.Join(", ", missing.Take(5).Select(m => m.Rel));
+                      throw new InvalidDataException(
+                          $"{missing.Count} game files could not be installed ({names}). " +
+                          "Your antivirus may be removing them: add the game folder to its exclusions and press INSTALL again.");
+                  }
+
                   if (only == null)
                   {
                       File.WriteAllLines(
                           Path.Combine(installPath, LauncherSettings.ManifestName),
-                          written.Select(w => $"{w.Size}|{w.Rel}"));
+                          expected.Select(w => $"{w.Size}|{w.Rel}"));
                   }
 
                   try { File.Delete(rar); } catch { }
                   if (only == null) { try { File.Delete(marker); } catch { } }
+              }
+
+              private static List<(string Rel, long Size)> FindMissing(
+                  string root, List<(string Rel, long Size)> expected)
+              {
+                  var result = new List<(string Rel, long Size)>();
+                  foreach (var f in expected)
+                  {
+                      var info = new FileInfo(SafePath(root, f.Rel));
+                      if (!info.Exists || info.Length != f.Size) result.Add(f);
+                  }
+                  return result;
               }
 
               private static async Task DownloadWithResumeAsync(
@@ -665,7 +146,12 @@ jobs:
                   }
               }
 
-              private static List<(string Rel, long Size)> Extract(
+              private static string ApplyStrip(string key, string strip) =>
+                  strip.Length > 0 && key.StartsWith(strip, StringComparison.OrdinalIgnoreCase)
+                      ? key[strip.Length..]
+                      : key;
+
+              private static (List<(string Rel, long Size)> Files, string Strip) Extract(
                   string rarPath, string root, HashSet<string>? only,
                   IProgress<InstallProgress>? progress, CancellationToken ct)
               {
@@ -686,12 +172,13 @@ jobs:
                           strip = first + "/";
                   }
 
-                  string Strip(string k) =>
-                      strip.Length > 0 && k.StartsWith(strip, StringComparison.OrdinalIgnoreCase) ? k[strip.Length..] : k;
+                  var files = list
+                      .Select(x => (Rel: ApplyStrip(x.Key, strip), Size: x.Size))
+                      .Where(x => x.Rel.Length > 0 && (only == null || only.Contains(x.Rel)))
+                      .ToList();
 
-                  long total = list.Where(x => only == null || only.Contains(Strip(x.Key))).Sum(x => x.Size);
+                  long total = files.Sum(x => x.Size);
                   long done = 0, last = 0;
-                  var written = new List<(string Rel, long Size)>();
 
                   using var fs = File.OpenRead(rarPath);
                   using var reader = ReaderFactory.Open(fs);
@@ -701,14 +188,13 @@ jobs:
                       ct.ThrowIfCancellationRequested();
                       if (reader.Entry.IsDirectory) continue;
 
-                      var rel = Strip(Norm(reader.Entry.Key));
+                      var rel = ApplyStrip(Norm(reader.Entry.Key), strip);
                       if (rel.Length == 0) continue;
                       if (only != null && !only.Contains(rel)) continue;
 
                       var target = SafePath(root, rel);
                       Directory.CreateDirectory(Path.GetDirectoryName(target)!);
 
-                      long fileSize = 0;
                       using (var src = reader.OpenEntryStream())
                       using (var dst = File.Create(target))
                       {
@@ -719,7 +205,6 @@ jobs:
                               ct.ThrowIfCancellationRequested();
                               dst.Write(buf, 0, n);
                               done += n;
-                              fileSize += n;
 
                               var now = Environment.TickCount64;
                               if (now - last > 100)
@@ -731,11 +216,31 @@ jobs:
                               }
                           }
                       }
-
-                      written.Add((rel, fileSize));
                   }
 
-                  return written;
+                  return (files, strip);
+              }
+
+              // Second pass: extracts specific files one by one (random access to the archive).
+              private static void ExtractSome(
+                  string rarPath, string root, string strip, HashSet<string> wanted, CancellationToken ct)
+              {
+                  using var archive = RarArchive.Open(rarPath);
+                  foreach (var e in archive.Entries)
+                  {
+                      ct.ThrowIfCancellationRequested();
+                      if (e.IsDirectory) continue;
+
+                      var rel = ApplyStrip(Norm(e.Key), strip);
+                      if (!wanted.Contains(rel)) continue;
+
+                      var target = SafePath(root, rel);
+                      Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+
+                      using var src = e.OpenEntryStream();
+                      using var dst = File.Create(target);
+                      src.CopyTo(dst);
+                  }
               }
 
               private static string Norm(string? key) => (key ?? "").Replace('\\', '/').TrimStart('/');
@@ -916,143 +421,3 @@ jobs:
               }
           }
           '@
-
-          Set-Content -Path _launcher/Updater.cs -Encoding utf8 -Value @'
-          using System.Diagnostics;
-          using System.IO;
-          using System.Net.Http;
-          using System.Reflection;
-          using System.Text.Json;
-
-          namespace DarkSideLauncher;
-
-          public sealed record UpdateInfo(Version Version, string DownloadUrl);
-
-          public static class Updater
-          {
-              public static Version CurrentVersion =>
-                  Normalize(Assembly.GetExecutingAssembly().GetName().Version ?? new Version(1, 0, 0));
-
-              private static Version Normalize(Version v) => new(v.Major, v.Minor, Math.Max(v.Build, 0));
-
-              private static void CleanupOld()
-              {
-                  try
-                  {
-                      var exe = Environment.ProcessPath;
-                      if (exe == null) return;
-                      var old = exe + ".old";
-                      if (File.Exists(old)) File.Delete(old);
-                  }
-                  catch { }
-              }
-
-              public static async Task<UpdateInfo?> CheckAsync(CancellationToken ct)
-              {
-                  CleanupOld();
-
-                  var url = $"https://api.github.com/repos/{LauncherSettings.RepoOwner}/{LauncherSettings.RepoName}/releases?per_page=30";
-
-                  using var req = new HttpRequestMessage(HttpMethod.Get, url);
-                  req.Headers.Accept.ParseAdd("application/vnd.github+json");
-                  using var resp = await Web.Client.SendAsync(req, ct);
-                  if (!resp.IsSuccessStatusCode) return null;
-
-                  using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
-                  UpdateInfo? best = null;
-
-                  foreach (var rel in doc.RootElement.EnumerateArray())
-                  {
-                      if (rel.GetProperty("draft").GetBoolean() || rel.GetProperty("prerelease").GetBoolean()) continue;
-
-                      var tag = rel.GetProperty("tag_name").GetString() ?? "";
-                      var prefix = LauncherSettings.LauncherTagPrefix;
-                      if (!tag.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
-                      if (!Version.TryParse(tag[prefix.Length..], out var parsed)) continue;
-
-                      var remote = Normalize(parsed);
-                      if (remote <= CurrentVersion) continue;
-                      if (best != null && remote <= best.Version) continue;
-
-                      foreach (var asset in rel.GetProperty("assets").EnumerateArray())
-                      {
-                          if (asset.GetProperty("name").GetString() == LauncherSettings.InstallerAssetName)
-                          {
-                              best = new UpdateInfo(remote, asset.GetProperty("browser_download_url").GetString()!);
-                              break;
-                          }
-                      }
-                  }
-                  return best;
-              }
-
-              public static async Task DownloadAndRunAsync(
-                  UpdateInfo info, IProgress<InstallProgress>? progress, CancellationToken ct)
-              {
-                  var exe = Environment.ProcessPath
-                            ?? throw new InvalidOperationException("Cannot locate the launcher file.");
-                  var dir = Path.GetDirectoryName(exe)!;
-                  var newFile = exe + ".new";
-                  var oldFile = exe + ".old";
-
-                  using (var resp = await Web.Client.GetAsync(info.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct))
-                  {
-                      resp.EnsureSuccessStatusCode();
-                      var total = resp.Content.Headers.ContentLength ?? 0;
-
-                      await using var src = await resp.Content.ReadAsStreamAsync(ct);
-                      await using var dst = File.Create(newFile);
-
-                      var buf = new byte[81920];
-                      long done = 0, last = 0;
-                      int n;
-                      while ((n = await src.ReadAsync(buf, ct)) > 0)
-                      {
-                          await dst.WriteAsync(buf.AsMemory(0, n), ct);
-                          done += n;
-
-                          var now = Environment.TickCount64;
-                          if (now - last > 100)
-                          {
-                              last = now;
-                              progress?.Report(new InstallProgress(
-                                  total > 0 ? done * 100.0 / total : 0, "Downloading launcher update..."));
-                          }
-                      }
-                  }
-
-                  if (File.Exists(oldFile)) File.Delete(oldFile);
-                  File.Move(exe, oldFile);
-                  File.Move(newFile, exe);
-
-                  Process.Start(new ProcessStartInfo("cmd.exe", $"/c ping 127.0.0.1 -n 3 >nul & start \"\" \"{exe}\"")
-                  {
-                      WorkingDirectory = dir,
-                      CreateNoWindow = true,
-                      UseShellExecute = false
-                  });
-              }
-          }
-          '@
-
-      - name: Resolve version
-        id: ver
-        shell: pwsh
-        run: |
-          if ("${{ github.ref_type }}" -eq "tag") { $v = "${{ github.ref_name }}" -replace '^launcher-v','' } else { $v = "1.0.0" }
-          "version=$v" >> $env:GITHUB_OUTPUT
-
-      - name: Publish (win-x64, single file)
-        shell: pwsh
-        run: dotnet publish _launcher/DarkSideLauncher.csproj -c Release -r win-x64 --self-contained true -p:Version=${{ steps.ver.outputs.version }} -o publish
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: DarkSideLauncher
-          path: publish/DarkSideLauncher.exe
-
-      - name: Publish release
-        if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: publish/DarkSideLauncher.exe
