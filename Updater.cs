@@ -15,8 +15,22 @@ public static class Updater
 
     private static Version Normalize(Version v) => new(v.Major, v.Minor, Math.Max(v.Build, 0));
 
+    private static void CleanupOld()
+    {
+        try
+        {
+            var exe = Environment.ProcessPath;
+            if (exe == null) return;
+            var old = exe + ".old";
+            if (File.Exists(old)) File.Delete(old);
+        }
+        catch { }
+    }
+
     public static async Task<UpdateInfo?> CheckAsync(CancellationToken ct)
     {
+        CleanupOld();
+
         var url = $"https://api.github.com/repos/{LauncherSettings.RepoOwner}/{LauncherSettings.RepoName}/releases?per_page=30";
 
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
@@ -55,7 +69,11 @@ public static class Updater
     public static async Task DownloadAndRunAsync(
         UpdateInfo info, IProgress<InstallProgress>? progress, CancellationToken ct)
     {
-        var file = Path.Combine(Path.GetTempPath(), $"DARKSIDE-Setup-{info.Version}.exe");
+        var exe = Environment.ProcessPath
+                  ?? throw new InvalidOperationException("Cannot locate the launcher file.");
+        var dir = Path.GetDirectoryName(exe)!;
+        var newFile = exe + ".new";
+        var oldFile = exe + ".old";
 
         using (var resp = await Web.Client.GetAsync(info.DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct))
         {
@@ -63,7 +81,7 @@ public static class Updater
             var total = resp.Content.Headers.ContentLength ?? 0;
 
             await using var src = await resp.Content.ReadAsStreamAsync(ct);
-            await using var dst = File.Create(file);
+            await using var dst = File.Create(newFile);
 
             var buf = new byte[81920];
             long done = 0, last = 0;
@@ -83,6 +101,17 @@ public static class Updater
             }
         }
 
-        Process.Start(new ProcessStartInfo(file, "/SILENT /NORESTART") { UseShellExecute = true });
+        // Windows allows renaming a running .exe, so swap files.
+        if (File.Exists(oldFile)) File.Delete(oldFile);
+        File.Move(exe, oldFile);
+        File.Move(newFile, exe);
+
+        // Start the new version after a short delay so this one has closed first.
+        Process.Start(new ProcessStartInfo("cmd.exe", $"/c ping 127.0.0.1 -n 3 >nul & start \"\" \"{exe}\"")
+        {
+            WorkingDirectory = dir,
+            CreateNoWindow = true,
+            UseShellExecute = false
+        });
     }
 }
